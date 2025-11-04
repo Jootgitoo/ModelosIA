@@ -19,14 +19,14 @@ URLS_POR_DEFECTO = [
 MODELO = "llama3.2" 
 
 # Límite de caracteres modelo
-LIMITE_CHARS = 15000 
+LIMITE_CHARS = 40000 
 
 # Etiquetas HTML que se eliminarán para limpiar el texto  
 ETIQUETAS_A_ELIMINAR = ['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'button', 'iframe', 'comment', 'noscript']
 
 
 
-# Cliente de Ollama configurado al puerto por defecto (11434)
+# Cliente de Ollama configurado al puerto por defecto
 OLLAMA_CLIENT = Client(host='http://localhost:11434')
 
 def crear_prompts(titulo_pagina: str, texto_limpio: str) -> list:
