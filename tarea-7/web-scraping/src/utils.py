@@ -3,8 +3,8 @@ import os
 import time
 import json
 import logging
+import slugify
 from pathlib import Path
-from slugify import slugify
 
 logger = logging.getLogger(__name__)
 

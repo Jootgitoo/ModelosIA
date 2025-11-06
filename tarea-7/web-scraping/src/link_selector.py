@@ -19,7 +19,10 @@ LINK_USER_PROMPT = open("prompts/link_user.md","r",encoding="utf-8").read()
 def call_ollama_cli(prompt: str) -> str:
     # nota: la sintaxis exacta de ollama CLI puede variar; intentamos usar 'ollama generate'
     cmd = ["ollama", "generate", OLLAMA_MODEL, "--prompt", prompt]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(
+        ["ollama", "run", "llama3", prompt],
+        capture_output=True, text=True
+    )
     if result.returncode != 0:
         logger.error("Ollama CLI error: %s", result.stderr)
         raise RuntimeError(result.stderr)
