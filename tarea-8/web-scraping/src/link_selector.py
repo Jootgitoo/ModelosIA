@@ -21,23 +21,35 @@ LINK_USER_PROMPT = open("prompts/link_user.md", "r", encoding="utf-8").read()
 
 
 def call_ollama_cli(prompt: str) -> str:
+    """
+    Ejecuta Ollama por CLI en Windows usando stdin en UTF-8.
+    Evita UnicodeEncodeError causado por CP1252.
+    """
     try:
-        result = subprocess.run(
+        import subprocess
+
+        process = subprocess.Popen(
             ["ollama", "run", OLLAMA_MODEL],
-            input=prompt,
-            text=True,
-            capture_output=True
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
 
-        if result.returncode != 0:
-            logger.error("Ollama CLI error: %s", result.stderr)
-            raise RuntimeError(result.stderr)
+        # IMPORTANTE: enviamos el prompt en bytes UTF-8
+        stdout, stderr = process.communicate(
+            input=prompt.encode("utf-8"),
+            timeout=120
+        )
 
-        return result.stdout
+        if process.returncode != 0:
+            raise RuntimeError(stderr.decode("utf-8", errors="ignore"))
+
+        return stdout.decode("utf-8", errors="ignore")
 
     except Exception as e:
         logger.error("Error ejecutando Ollama CLI: %s", e)
         raise
+
 
 
 def call_ollama_http(prompt: str) -> str:

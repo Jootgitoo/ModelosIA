@@ -62,3 +62,8 @@ def slug(name: str) -> str:
     Limita la longitud a 50 caracteres.
     """
     return slugify(name)[:50]
+
+def sanitize_markdown(md: str) -> str:
+    lines = [ln.rstrip() for ln in md.splitlines()]
+    return "\n".join(lines).strip()
+

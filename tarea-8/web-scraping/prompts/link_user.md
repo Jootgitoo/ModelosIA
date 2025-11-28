@@ -7,6 +7,14 @@ A continuación tienes una lista de enlaces detectados y su snippet asociado:
 Por favor, analiza cada enlace y devuélveme ÚNICAMENTE un JSON válido siguiendo el formato definido en el mensaje del sistema.
 
 Solo devuelve:
-{
-  "links": [ ... ]
-}
+
+{{
+  "links": [
+    {{
+      "type": "...",
+      "url": "...",
+      "score": 85,
+      "rationale": "..."
+    }}
+  ]
+}}
