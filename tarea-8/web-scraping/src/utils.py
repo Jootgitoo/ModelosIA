@@ -36,25 +36,95 @@ def load_text(path):
     """
     return Path(path).read_text(encoding="utf-8")
 
+import json
+import re
+
 def safe_json_loads(s: str):
     """
-    Intenta cargar un string JSON de forma segura.
-    Si el formato no es válido, busca un bloque JSON dentro del texto y lo intenta parsear.
+    Intenta parsear JSON de forma segura, limpiando markdown y texto adicional.
+    
+    Args:
+        s: String que contiene JSON (posiblemente con texto adicional)
+    
+    Returns:
+        Objeto Python parseado desde JSON
+    
+    Raises:
+        json.JSONDecodeError: Si el JSON es inválido después de limpiar
     """
+    if not s or not s.strip():
+        raise json.JSONDecodeError("Empty string", s, 0)
+    
+    s = s.strip()
+    
+    # 1. Intentar parsear directamente
     try:
-        # Intenta convertir directamente a JSON
         return json.loads(s)
-    except Exception:
-        # Si falla, busca una posible estructura JSON dentro del texto
-        import re
-        found = re.search(r'(\{.*\})', s, flags=re.S)
-        if found:
+    except json.JSONDecodeError:
+        pass
+    
+    # 2. Extraer de bloques markdown (```json ... ``` o ``` ... ```)
+    markdown_patterns = [
+        r'```json\s*\n(.*?)\n```',
+        r'```\s*\n(.*?)\n```',
+        r'```json\s*(.*?)```',
+        r'```(.*?)```'
+    ]
+    
+    for pattern in markdown_patterns:
+        match = re.search(pattern, s, re.DOTALL)
+        if match:
             try:
-                return json.loads(found.group(1))
-            except Exception:
-                pass
-        # Si no se logra parsear, lanza la excepción
-        raise
+                return json.loads(match.group(1).strip())
+            except json.JSONDecodeError:
+                continue
+    
+    # 3. Buscar objeto JSON completo con llaves balanceadas
+    # Encuentra todas las posiciones de '{'
+    for i in range(len(s)):
+        if s[i] == '{':
+            # Intentar encontrar el cierre balanceado
+            brace_count = 0
+            for j in range(i, len(s)):
+                if s[j] == '{':
+                    brace_count += 1
+                elif s[j] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        # Encontramos un objeto JSON completo
+                        json_candidate = s[i:j+1]
+                        try:
+                            return json.loads(json_candidate)
+                        except json.JSONDecodeError:
+                            # Este no era válido, seguir buscando
+                            break
+            # Si no encontramos cierre, continuar con el siguiente '{'
+    
+    # 4. Buscar array JSON completo con corchetes balanceados
+    for i in range(len(s)):
+        if s[i] == '[':
+            bracket_count = 0
+            for j in range(i, len(s)):
+                if s[j] == '[':
+                    bracket_count += 1
+                elif s[j] == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        json_candidate = s[i:j+1]
+                        try:
+                            return json.loads(json_candidate)
+                        except json.JSONDecodeError:
+                            break
+    
+    # Si todo falla, mostrar información de depuración
+    preview = s[:200] + "..." if len(s) > 200 else s
+    raise json.JSONDecodeError(
+        f"No valid JSON found. Preview: {preview}", 
+        s, 
+        0
+    )
+    
+
 
 def slug(name: str) -> str:
     """
