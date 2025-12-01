@@ -22,8 +22,7 @@ LINK_USER_PROMPT = open("prompts/link_user.md", "r", encoding="utf-8").read()
 
 def call_ollama_cli(prompt: str) -> str:
     """
-    Ejecuta Ollama por CLI en Windows usando stdin en UTF-8.
-    Evita UnicodeEncodeError causado por CP1252.
+    Ejecuta Ollama por CLI en Windows
     """
     try:
         import subprocess
@@ -142,13 +141,20 @@ def select_relevant_links(base_url: str, items: List[Dict]) -> Dict:
 
 
 def validate_schema(parsed: dict):
+    # 1. Verifica que exista la clave principal "links"
     if "links" not in parsed:
         raise ValueError("El JSON no tiene clave 'links'.")
 
+    # 2. Comprueba que "links" sea una lista (como se espera)
     if not isinstance(parsed["links"], list):
         raise ValueError("'links' debe ser una lista.")
 
+    # 3. Recorre cada objeto dentro de la lista "links"
     for obj in parsed["links"]:
+        # 4. Cada objeto debe contener los campos obligatorios:
+        #    "type", "url", "score" y "rationale"
         for key in ("type", "url", "score", "rationale"):
             if key not in obj:
+                # Si falta alguno, lanza un error indicando cuál falta
                 raise ValueError(f"Falta el campo obligatorio '{key}' en {obj}.")
+

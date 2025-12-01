@@ -73,29 +73,44 @@ def extract_links(html: str, base_url: str) -> List[str]:
 
 
 def scrape_and_extract(url: str, session: requests.Session = None, rate_limit: float = 0.6):
+    # Verifica si la URL está permitida por robots.txt
+    # Si robots.txt bloquea la ruta, se lanza una excepción
     if not can_fetch(url):
         raise PermissionError(f"Scraping bloqueado por robots.txt: {url}")
 
+    # Si no se pasó una sesión reutilizable, se crea una
     session = session or requests.Session()
 
+    # Descarga la página usando la función fetch(), que devuelve status y HTML
     status, html = fetch(url, session=session)
 
-    # Espera obligatoria entre peticiones
+    # Pausa obligatoria para respetar el rate limit entre peticiones
     time.sleep(rate_limit_sleep(rate_limit))
 
+    # Extrae todos los enlaces relevantes del HTML usando la URL como base
     links = extract_links(html, base_url=url)
 
-    # Nuevo → snippet corto para enviar al LLM
+    # Extrae un pequeño fragmento de texto para enviar al LLM
+    # Útil para hacer un análisis rápido sin enviar la página completa
     snippet = extract_text_snippet(html, max_chars=300)
 
     return html, links, snippet
 
 
-def extract_text_snippet(html: str, max_chars: int = 300) -> str:
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script","style","noscript","svg"]):
-        tag.decompose()
 
+def extract_text_snippet(html: str, max_chars: int = 300) -> str:
+    # Crea un objeto BeautifulSoup para analizar el HTML
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Elimina etiquetas irrelevantes o que no contienen texto útil
+    for tag in soup(["script","style","noscript","svg"]):
+        tag.decompose()  # Elimina completamente la etiqueta y su contenido
+
+    # Obtiene el texto visible de la página,
+    # usando espacios como separador y eliminando espacios sobrantes
     text = soup.get_text(separator=" ", strip=True)
+
+    # Devuelve solo los primeros max_chars caracteres
+    # (un fragmento corto para enviar al LLM)
     return text[:max_chars]
 

@@ -35,7 +35,7 @@ def generate_brochure(company_name: str, compiled_text: str, tone: str = "formal
     prompt = BROCHURE_SYSTEM_PROMPT.format(
         company=company_name,
         tone=tone,
-        content=compiled_text[:16000]  # límite seguro
+        content=compiled_text[:16000]  # Límite
     )
 
     logger.info("Generando folleto para %s...", company_name)
@@ -57,7 +57,7 @@ def generate_brochure(company_name: str, compiled_text: str, tone: str = "formal
 
 def export_pdf(md_path: str, html_out: str = None, pdf_out: str = None):
     """
-    Convierte markdown → HTML → PDF (si weasyprint disponible)
+    Convierte markdown → HTML → PDF
     """
     text = open(md_path, "r", encoding="utf-8").read()
 

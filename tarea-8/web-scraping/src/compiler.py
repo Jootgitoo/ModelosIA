@@ -1,5 +1,6 @@
 import time
 import logging
+import requests
 from bs4 import BeautifulSoup
 from .scraping import fetch
 from .utils import slug, rate_limit_sleep
@@ -26,29 +27,35 @@ def compile_pages(selected_links, session=None, rate_limit=0.6):
     """
     Descarga, limpia y unifica el contenido de las páginas seleccionadas.
 
-    selected_links -> dict con:
-    { "links": [ { "url": "...", "type": "...", "score": ..., "rationale": "..." }, ... ] }
-
     Devuelve un único string unificado.
     """
+    # Si no se proporciona una sesión HTTP, se crea una nueva
     session = session or requests.Session()
 
+    # Lista donde se irá acumulando el texto limpio de todas las páginas
     unified_text = []
+
+    # Se extrae la lista de enlaces desde el diccionario recibido
     links = selected_links.get("links", [])
 
     logger.info("Compilando %d páginas seleccionadas por el LLM...", len(links))
 
+    # Recorre cada enlace seleccionado
     for item in links:
         url = item["url"]
-        typ = item.get("type", "other")
-        score = item.get("score")
+        typ = item.get("type", "other")  # Tipo de página (opcional)
+        score = item.get("score")        # Puntuación asignada (opcional)
 
         logger.info("Descargando %s (tipo=%s, score=%s)", url, typ, score)
 
         try:
+            # Se descarga el HTML de la página usando la función fetch()
             _, html = fetch(url, session=session)
+
+            # Se limpia el HTML para obtener solo el texto útil
             cleaned = clean_text_from_html(html)
 
+            # Se construye una sección formateada y se almacena
             unified_text.append(
                 f"# Página: {url}\n"
                 f"## Tipo: {typ}\n"
@@ -56,11 +63,12 @@ def compile_pages(selected_links, session=None, rate_limit=0.6):
                 "----------------------------------------\n\n"
             )
 
-            # Respetar rate limit
+            # Pausa entre peticiones según el rate limit
             time.sleep(rate_limit_sleep(rate_limit))
 
         except Exception as e:
+            # Si ocurre un error con alguna página, se registra pero el proceso continúa
             logger.error("Error al compilar %s: %s", url, e)
 
-    # Resultado final para LLM2: texto unificado
+    # Devuelve un único string con todas las páginas unificadas
     return "\n".join(unified_text)
