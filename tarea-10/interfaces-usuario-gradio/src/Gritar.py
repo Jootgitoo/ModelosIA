@@ -1,43 +1,34 @@
 import gradio as gr
-#from dotenv import load_dotenv
-import os
 import requests
 
 def call_ollama(text):
-    # URL por defecto de la API de Ollama
     OLLAMA_API_URL = "http://localhost:11434/api/generate" 
-    OLLAMA_MODEL = "llama3" # Asegúrate de que este modelo esté descargado
+    OLLAMA_MODEL = "llama3"
 
-    # Combinamos los prompts para el formato de Ollama/llama
-    full_prompt = f"Eres un generador de excusas para todo tipo de situaciones. Generas excusas breves"
+    # 1. Definimos la PERSONALIDAD (System Prompt)
+    system_instruction = "Eres un generador de excusas creativo. Responde ÚNICAMENTE con la excusa exacta, sin introducciones, sin saludos y sin ofrecer más ayuda."
 
-    # Configuramos la petición para limitar la longitud
+    # 2. Combinamos la personalidad con el TEXTO DEL USUARIO
+    # Aquí es donde estaba el fallo: ahora concatenamos la instrucción + el input del usuario
+    final_prompt = f"{system_instruction}\n\nLa situación es: {text}\nExcusa:"
+
     payload = {
         "model": OLLAMA_MODEL,
-        "prompt": full_prompt,
+        "prompt": final_prompt,  # Enviamos el prompt combinado
         "stream": False,
         "options": {
-            # El parámetro para limitar tokens de salida en Ollama es num_predict
             "num_predict": 100, 
-            "temperature": 0.3
+            "temperature": 0.7 # Subí un poco la temperatura para que sea más creativa
         }
     }
-
-    try:
-        # Realizamos la llamada HTTP
-        response = requests.post(OLLAMA_API_URL, json=payload)
-        response.raise_for_status() # Manejo básico de errores HTTP
-        
-        # Extraemos y mostramos la respuesta
-        data = response.json()
-        respuesta = data.get("response", "Error al procesar la respuesta.")
-        print(f"Respuesta de Ollama: {respuesta}")
-        return respuesta
-
-    except requests.exceptions.RequestException as e:
-        error_message = f"Error al conectar con Ollama: {e}"
-        print(error_message)
-        return error_message
+    
+    # 3. Hacemos la petición (añadí esta parte por si te faltaba)
+    response = requests.post(OLLAMA_API_URL, json=payload)
+    
+    if response.status_code == 200:
+        return response.json().get("response", "")
+    else:
+        return f"Error: {response.status_code}"
 
 view = gr.Interface(
     fn=call_ollama,

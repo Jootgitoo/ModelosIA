@@ -34,7 +34,7 @@ else:
     print("Error: Clave Google no encontrada.")
     
 
-# Promt de Sistema (Contexto)
+# Promt del Sistema (Contexto)
 system_message = "Eres un asistenteque que cuentas chistes muy graciosos."
 
 #Promt de Usuario (Petición)
