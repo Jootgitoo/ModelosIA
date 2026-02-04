@@ -1,6 +1,6 @@
 import torch
 import os
-import asyncio
+import asyncio # Necesario para el audio
 from pypdf import PdfReader
 from deep_translator import GoogleTranslator
 import edge_tts
@@ -10,39 +10,25 @@ from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 import moviepy.video.fx as vfx
 
 
-# Se determina si hay una GPU disponible para acelerar el proceso (CUDA).
+# Configuración del Hardware
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# Se usa float16 en GPU para ahorrar memoria y aumentar velocidad, o float32 en CPU.
 torch_dtype = torch.float16 if device == "cuda" else torch.float32
 
 print(f"🎬 Iniciando estudio en: {device}")
 
 def leer_pdf_y_dividir(ruta_pdf):
-    """
-    Lee un archivo PDF, extrae su texto y lo divide en escenas.
-    
-    Args:
-        ruta_pdf (str): La ruta al archivo PDF del guion.
-        
-    Returns:
-        list: Una lista de strings, donde cada string es una escena (un grupo de frases).
-    """
-    # Usamos pypdf para leer el archivo
     reader = PdfReader(ruta_pdf)
-
     texto_completo = ""
-
-    # Iteramos por cada página para extraer el texto crudo
     for page in reader.pages:
         texto_completo += page.extract_text()
     
-    # Convertimos los saltos de línea en espacios
+    # Cambiamos los salto de línea por espacios
     texto_limpio = texto_completo.replace('\n', ' ')
     
-    # Dividimos el texto en frases
+    # Dividimos por frases
     frases = [f.strip() + "." for f in texto_limpio.split('.') if len(f) > 10]
     
-    # Agrupamos las frases en bloques para tener más contexto.
+    # Agrupamos frases en "escenas" (ej. cada 2 frases es una escena)
     escenas = []
     chunk_size = 2 
     for i in range(0, len(frases), chunk_size):
@@ -50,40 +36,23 @@ def leer_pdf_y_dividir(ruta_pdf):
         if bloque:
             escenas.append(bloque)
             
-    # Retornamos solo las primeras 4 escenas para hacer un tráiler
-    return escenas[:4]
+    return escenas[:4] # Limitamos a 4 escenas para el tráiler
 
-# Cargar el modelo 
+# Cargar el modelo de lenguaje (LLM)
 pipe_llm = pipeline("text-generation", model="TinyLlama/TinyLlama-1.1B-Chat-v1.0", torch_dtype=torch_dtype, device=device)
 
 def generar_prompt_base(texto_escena):
-    """
-    Utiliza el LLM para convertir el texto en video
-    
-    Args:
-        texto_escena (str): El texto
-        
-    Returns:
-        str: Una descripción visual optimizada para generadores de imágenes.
-    """
-    # Estructura de chat específica requerida por el modelo TinyLlama (<|user|> ... <|assistant|>)
+    # Estructura específica de TinyLlama
     prompt = f"<|user|>\nDescribe the visual action in this scene for a movie shot in 15 words:\n{texto_escena}\n<|assistant|>"
-    
-    # Generamos la respuesta con parámetros para dar creatividad
     outputs = pipe_llm(prompt, max_new_tokens=60, do_sample=True, temperature=0.7)
-    
-    # Limpiamos la salida para quedarnos solo con la respuesta del asistente
     return outputs[0]['generated_text'].split("<|assistant|>")[-1].strip()
 
 
 def inyectar_vestuario(texto_original, prompt_base):
-    """
-    Enriquece el prompt con detalles estilísticos y específicos de los personajes.
-    """
     texto_lower = texto_original.lower()
     prompt_mejorado = prompt_base
     
-    # Detectamos palabras clave en el guion original para añadir descripciones visuales precisas.
+    # --- LÓGICA ACERO PURO (REAL STEEL) ---
     if 'atom' in texto_lower:
         prompt_mejorado += ", (rusted grey fighting robot:1.5), glowing blue eyes, mechanical face, boxing stance, battle damage"
     elif 'zeus' in texto_lower:
@@ -91,108 +60,86 @@ def inyectar_vestuario(texto_original, prompt_base):
     elif 'charlie' in texto_lower:
         prompt_mejorado += ", (man with short beard and leather jacket:1.2), looking at robot"
     else:
-        # Si no se menciona un personaje específico, forzamos la estética general de robots de boxeo.
+        # Si no menciona a nadie, aseguramos estética robot
         prompt_mejorado += ", robots boxing in a dirty arena, metal textures"
 
-    # Keywords técnicas para forzar al modelo a generar imágenes de alta calidad tipo cine.
-    # Estrategia Close-Up para evitar caras deformes si están muy lejos.
+    # Estrategia Close-Up para evitar caras deformes [cite: 156]
     prompt_mejorado += ", close-up shot, 8k, cinematic lighting, photorealistic"
     
     return prompt_mejorado
 
 
-# Stable Diffusion se encarga de convertir el texto a imagen. Usamos "Realistic Vision" para estilo fotorealista.
+# Cargar modelo de imagen (El Pintor)
 pipe_img = StableDiffusionPipeline.from_pretrained("SG161222/Realistic_Vision_V5.1_noVAE", torch_dtype=torch_dtype)
 pipe_img = pipe_img.to(device)
 
 def generar_imagen(prompt_final, nombre_archivo):
-    """
-    Genera una imagen a partir del prompt y la guarda en disco.
-    """
+    # Parámetros de calidad explicados en la teoría [cite: 174, 175]
     image = pipe_img(
         prompt=prompt_final,
         negative_prompt="cartoon, drawing, anime, deformed, bad anatomy, disfigured, human skin on robot", 
-        num_inference_steps=40, # Más pasos = Mayor calidad (pero más tiempo).
-        guidance_scale=7.0,     # Qué tanto debe obedecer al prompt
-        height=512, width=512   # Resolución cuadrada estándar
+        num_inference_steps=40, # Calidad alta
+        guidance_scale=7.0,     # Fidelidad al texto
+        height=512, width=512
     ).images[0]
     image.save(nombre_archivo)
 
 async def generar_audio(texto_ingles, nombre_archivo):
-    """
-    Traduce el guion al español y genera una locución con voz
-    """
-    # Traducimos al español
+    # 1. Traducir al español [cite: 186]
     traductor = GoogleTranslator(source='auto', target='es')
     texto_espanol = traductor.translate(texto_ingles)
     
-    # Generamos voz neural con edge-tts (servicio de Microsoft) para una voz natural.
+    # 2. Generar voz neural [cite: 188]
     communicate = edge_tts.Communicate(texto_espanol, 'es-ES-AlvaroNeural')
     await communicate.save(nombre_archivo)
 
 
 def montar_video(datos_escenas, salida="trailer_acero_puro.mp4"):
-    """
-    Junta las imágenes y audios generados en un archivo de video final MP4.
-    """
     clips = []
     for escena in datos_escenas:
-
-        # Cargamos el archivo de audio generado
+        # Cargamos audio
         audio = AudioFileClip(escena['audio'])
-        
-        # Creamos un clip de imagen estática
-        # .with_duration: Hacemos que la imagen dure lo mismo que el audio.
-        # .with_audio: Pegamos el audio a la imagen.
+        # Creamos imagen y asignamos duración del audio
         clip = ImageClip(escena['imagen']).with_duration(audio.duration).with_audio(audio)
-        
-        # Efecto de transición
+        # Efecto de transición (crossfade)
         clip = clip.with_effects([vfx.CrossFadeIn(0.5)])
-        
         clips.append(clip)
     
-    # Concatenamos todos los clips en secuencia
+    # Renderizamos
     video_final = concatenate_videoclips(clips, method="compose")
-    
-    # Renderizamos y guardamos el archivo final. 24 fps es estándar para cine.
     video_final.write_videofile(salida, fps=24)
 
 async def main():
-    """
-    Función principal que orquesta todo el flujo de trabajo (Pipeline).
-    """
-    # Leemos el guion y lo preparamos
+    # 1. Leemos el guion
     escenas_texto = leer_pdf_y_dividir("docs\input.pdf")
     datos_para_montaje = []
 
-    # Procesamos cada escena
+    # 2. Bucle por cada escena [cite: 205]
     for i, texto in enumerate(escenas_texto):
         print(f"Procesando escena {i+1}...")
         
-        # El LLM imagina la escena
+        # El Cerebro piensa
         prompt_base = generar_prompt_base(texto)
-
-        # Ajustamos el prompt con el estilo de nuestra película
+        # Inyectamos contexto de Acero Puro
         prompt_final = inyectar_vestuario(texto, prompt_base)
         
         print(f"Prompt Generado: {prompt_final}")
         
+        # Nombres de archivos temporales
         archivo_img = f"frame_{i}.png"
         archivo_audio = f"audio_{i}.mp3"
         
-        # Generamos la imagen
+        # Generamos Assets
         generar_imagen(prompt_final, archivo_img)
-
-        # Generamos el audio
         await generar_audio(texto, archivo_audio)
         
-        # Guardamos la referencia de los archivos creados para el montaje
+        # Guardamos datos para el editor
         datos_para_montaje.append({
             'imagen': archivo_img,
             'audio': archivo_audio
         })
 
-    # Montamos el video
+    # 3. Montaje final
     montar_video(datos_para_montaje)
     print("¡Corte! Película terminada.")
 
